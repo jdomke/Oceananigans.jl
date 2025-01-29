@@ -1,0 +1,65 @@
+#!/bin/bash
+#PJM -L "node=1"
+#PJM -L "rscunit=rscunit_ft01"
+#PJM -L "rscgrp=small"
+#PJM -L "elapse=01:00:00"
+#PJM --llio cn-cache-size=4096Mi
+#PJM --llio localtmp-size=80Gi
+#PJM -x PJM_LLIO_GFSCACHE='/vol0002:/vol0003:/vol0004:/vol0005:/vol0006'
+#PJM --mpi max-proc-per-node=4
+#PJM -L freq=2200
+#PJM -L throttling_state=0
+#PJM -L issue_state=0
+#PJM -L ex_pipe_state=0
+#PJM -L eco_state=0
+#PJM -L retention_state=0
+#PJM -j
+
+set +e  #commands returning non-zero exit codes will not cause the entire script to fail
+set -x
+if ! lscpu | grep 'sve' >/dev/null 2>&1; then echo "ERR: not on login node"; exit 1; fi
+
+. /vol0004/apps/oss/spack/share/spack/setup-env.sh
+COMP="gcc@13.2.0"
+spack load gcc@13.2.0
+spack load automake@1.16.1 %${COMP}
+spack load autoconf@2.69 %${COMP}
+spack load python@3.11.6 %${COMP}
+spack load perl@5.26.3 %${COMP}
+spack load m4@1.4.18 %${COMP}
+spack load cmake@3.27.7 /zbtdwl7 %${COMP}
+spack load pkgconf@1.4.2 %${COMP}
+spack load curl@8.4.0 /bimducx %${COMP}
+
+ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+INSTDIR="${ROOTDIR}/inst/julia"
+export JULIA_DEPOT_PATH="${INSTDIR}/.julia"
+
+alias julia="${INSTDIR}/bin/julia"
+
+unset OMP_NUM_THREADS; unset JULIA_NUM_THREADS
+export OMP_NUM_THREADS=$(nproc)
+export JULIA_NUM_THREADS=$(nproc)
+
+# simple math
+julia -e 'using BenchmarkTools, LinearAlgebra; r1 = rand(8000, 8000); r2 = rand(8000, 8000); c = zeros(8000, 8000); println(@belapsed $c .= $r1 * $r2); println(@belapsed LinearAlgebra.mul!($c, $r1, $r2));'
+
+# ocean test case
+julia -e 'using Oceananigans; grid = RectilinearGrid(CPU(), size=(128, 128), x=(0, 2π), y=(0, 2π), topology=(Periodic, Periodic, Flat)); model = NonhydrostaticModel(; grid, advection=WENO()); ϵ(x, y) = 2rand() - 1; set!(model, u=ϵ, v=ϵ); simulation = Simulation(model; Δt=0.01, stop_time=4); run!(simulation)'
+
+# single rank integrated bench
+cd "${ROOTDIR}/benchmark"
+rm Manifest.toml
+julia -e 'using Pkg; Pkg.activate(pwd()); Pkg.instantiate(); Pkg.develop(PackageSpec(path=joinpath(@__DIR__, "..")));'
+julia -e 'using Pkg; Pkg.add("Plots"); Pkg.add("PyPlot"); Pkg.add("DataFrames"); Pkg.add("PrettyTables"); Pkg.add("CUDA");'
+sed -i -e 's@using Benchmarks@include("src/Benchmarks.jl")\nusing .Benchmarks@g' benchmark_shallow_water_model.jl
+sed -i -E 's@([cg]pu_times\[i] =)@#\1@g' benchmark_shallow_water_model.jl
+sed -i -E 's@(, 4096)]@\1, 8192]@g' benchmark_shallow_water_model.jl
+sed -i -e 's@CUDA.\@sync blocking=true @@g' benchmark_shallow_water_model.jl
+sed -i -E 's@^(display)@#\1@g' benchmark_shallow_water_model.jl
+sed -i -E 's@^(savefig)@#\1@g' benchmark_shallow_water_model.jl
+sed -i -e 's@, by=.*@)@g' benchmark_shallow_water_model.jl
+julia benchmark_shallow_water_model.jl
+
+# multi rank
+exit

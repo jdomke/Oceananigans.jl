@@ -1,0 +1,56 @@
+#!/bin/bash
+#PJM -L "node=1"
+#PJM -L "rscunit=rscunit_ft01"
+#PJM -L "rscgrp=small"
+#PJM -L "elapse=02:00:00"
+#PJM --llio cn-cache-size=4096Mi
+#PJM --llio localtmp-size=80Gi
+#PJM -x PJM_LLIO_GFSCACHE='/vol0002:/vol0003:/vol0004:/vol0005:/vol0006'
+#PJM --mpi max-proc-per-node=1
+#PJM -L freq=2200
+#PJM -L throttling_state=0
+#PJM -L issue_state=0
+#PJM -L ex_pipe_state=0
+#PJM -L eco_state=0
+#PJM -L retention_state=0
+#PJM -j
+
+set +e  #commands returning non-zero exit codes will not cause the entire script to fail
+set -x
+if ! lscpu | grep 'sve' >/dev/null 2>&1; then echo "ERR: not on login node"; exit 1; fi
+
+. /vol0004/apps/oss/spack/share/spack/setup-env.sh
+COMP="gcc@13.2.0"
+spack load gcc@13.2.0
+spack load automake@1.16.1 %${COMP}
+spack load autoconf@2.69 %${COMP}
+spack load python@3.11.6 %${COMP}
+spack load perl@5.26.3 %${COMP}
+spack load m4@1.4.18 %${COMP}
+spack load cmake@3.27.7 /zbtdwl7 %${COMP}
+spack load pkgconf@1.4.2 %${COMP}
+spack load curl@8.4.0 /bimducx %${COMP}
+
+ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+cd julia/
+MBD="$(pwd)/mybuilddir"
+rm -rf "${MBD}"; mkdir "${MBD}"
+make O="${MBD}" configure
+
+cp Make.inc "${MBD}/"
+INSTDIR="${ROOTDIR}/inst/julia"
+export JULIA_DEPOT_PATH="${INSTDIR}/.julia"
+
+make -j$(nproc) 2>&1 | tee mymake.log
+make prefix="${INSTDIR}" install
+
+alias julia="${INSTDIR}/bin/julia"
+
+unset OMP_NUM_THREADS; unset JULIA_NUM_THREADS
+export OMP_NUM_THREADS=$(nproc)
+export JULIA_NUM_THREADS=$(nproc)
+
+julia -e 'using Pkg; Pkg.add("BenchmarkTools"); Pkg.add(url="https://github.com/jdomke/FujitsuBLAS.jl.git"); Pkg.add("LinearAlgebra"); Pkg.add("LLVM"); Pkg.add("Reactant"); ENV["JULIA_MPI_BINARY"]="system"; ENV["JULIA_MPICC"]="mpifcc"; using Pkg; Pkg.add("MPI"); Pkg.build("MPI"; verbose=true);'
+julia -e 'using Pkg; Pkg.add("Oceananigans"); Pkg.status("Oceananigans");'
+
