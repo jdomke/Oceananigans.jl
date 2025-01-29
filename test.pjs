@@ -25,6 +25,7 @@ spack load gcc@13.2.0
 spack load automake@1.16.1 %${COMP}
 spack load autoconf@2.69 %${COMP}
 spack load python@3.11.6 %${COMP}
+spack load py-numpy@1.24.4 %${COMP}
 spack load perl@5.26.3 %${COMP}
 spack load m4@1.4.18 %${COMP}
 spack load cmake@3.27.7 /zbtdwl7 %${COMP}
@@ -52,14 +53,7 @@ cd "${ROOTDIR}/benchmark"
 rm Manifest.toml
 julia -e 'using Pkg; Pkg.activate(pwd()); Pkg.instantiate(); Pkg.develop(PackageSpec(path=joinpath(@__DIR__, "..")));'
 julia -e 'using Pkg; Pkg.add("Plots"); Pkg.add("PyPlot"); Pkg.add("DataFrames"); Pkg.add("PrettyTables"); Pkg.add("CUDA");'
-sed -i -e 's@using Benchmarks@include("src/Benchmarks.jl")\nusing .Benchmarks@g' benchmark_shallow_water_model.jl
-sed -i -E 's@([cg]pu_times\[i] =)@#\1@g' benchmark_shallow_water_model.jl
-sed -i -E 's@(, 4096)]@\1, 8192]@g' benchmark_shallow_water_model.jl
-sed -i -e 's@CUDA.\@sync blocking=true @@g' benchmark_shallow_water_model.jl
-sed -i -E 's@^(display)@#\1@g' benchmark_shallow_water_model.jl
-sed -i -E 's@^(savefig)@#\1@g' benchmark_shallow_water_model.jl
-sed -i -e 's@, by=.*@)@g' benchmark_shallow_water_model.jl
-julia benchmark_shallow_water_model.jl
+julia benchmark_shallow_water_model_fugaku.jl
 
 # multi rank
 exit

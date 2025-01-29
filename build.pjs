@@ -25,6 +25,7 @@ spack load gcc@13.2.0
 spack load automake@1.16.1 %${COMP}
 spack load autoconf@2.69 %${COMP}
 spack load python@3.11.6 %${COMP}
+spack load py-numpy@1.24.4 %${COMP}
 spack load perl@5.26.3 %${COMP}
 spack load m4@1.4.18 %${COMP}
 spack load cmake@3.27.7 /zbtdwl7 %${COMP}
