@@ -62,4 +62,17 @@ julia -e 'using Pkg; Pkg.add("Plots"); Pkg.add("PyPlot"); Pkg.add("DataFrames");
 julia benchmark_shallow_water_model_fugaku.jl
 
 # multi rank
+if [ ! -d "${ROOTDIR}/GB-25/ocean-climate-simulation/" ]; then
+	cd "${ROOTDIR}/GB-25/"
+	git fetch origin pull/9/head:glw/ocean-climate-sim
+	git checkout glw/ocean-climate-sim
+fi
+
+cd "${ROOTDIR}/GB-25/oceananigans-dynamical-core/"
+julia super_simple_simulation.jl
+
+cd "${ROOTDIR}/GB-25/ocean-climate-simulation"
+sed -i -e '/using Oceananigans/i using MPI' -e '/using Printf/a MPI.Init()' -e 's@arch = CPU()@arch = Distributed(CPU(), topology=(Periodic, Periodic, Flat), ranks=(Rx, Ry, 1), communicator=MPI.COMM_WORLD)\ncomm = MPI.COMM_WORLD\nlocal_rank = MPI.Comm_rank(comm)\nR = MPI.Comm_size(comm)\nRx = parse(Int, ARGS[1])\nRy = parse(Int, ARGS[2])\n\@assert Rx * Ry == R@g' ocean_climate_simulation.jl
+mpiexec -n 4 "${INSTDIR}/bin/julia" ocean_climate_simulation.jl 2 2
+
 exit
