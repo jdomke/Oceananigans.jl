@@ -19,18 +19,21 @@ set +e  #commands returning non-zero exit codes will not cause the entire script
 set -x
 if ! lscpu | grep 'sve' >/dev/null 2>&1; then echo "ERR: not on login node"; exit 1; fi
 
+mkdir -p $HOME/.spack/cache
 . /vol0004/apps/oss/spack/share/spack/setup-env.sh
 COMP="gcc@13.2.0"
-spack load gcc@13.2.0
-spack load automake@1.16.1 %${COMP}
-spack load autoconf@2.69 %${COMP}
-spack load python@3.11.6 %${COMP}
-spack load py-numpy@1.24.4 %${COMP}
-spack load perl@5.26.3 %${COMP}
-spack load m4@1.4.18 %${COMP}
-spack load cmake@3.27.7 /zbtdwl7 %${COMP}
-spack load pkgconf@1.4.2 %${COMP}
-spack load curl@8.4.0 /bimducx %${COMP}
+ARCH="arch=linux-rhel8-a64fx"
+spack load gcc@13.2.0 ${ARCH}
+spack load automake@1.16.1 %${COMP} ${ARCH}
+spack load autoconf@2.69 %${COMP} ${ARCH}
+spack load python@3.11.6 %${COMP} ${ARCH}
+spack load py-setuptools@59.4.0 %${COMP} ${ARCH}
+spack load py-numpy@1.24.4 %${COMP} ${ARCH}
+spack load perl@5.26.3 %${COMP} ${ARCH}
+spack load m4@1.4.18 %${COMP} ${ARCH}
+spack load cmake@3.27.7 /zbtdwl7 %${COMP} ${ARCH}
+spack load pkgconf@1.4.2 %${COMP} ${ARCH}
+spack load curl@8.4.0 /bimducx %${COMP} ${ARCH}
 
 ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -51,7 +54,15 @@ alias julia="${INSTDIR}/bin/julia"
 unset OMP_NUM_THREADS; unset JULIA_NUM_THREADS
 export OMP_NUM_THREADS=$(nproc)
 export JULIA_NUM_THREADS=$(nproc)
+# fix known bugs: https://juliaparallel.org/MPI.jl/latest/knownissues/#Multi-threading-and-signal-handling
+export UCX_ERROR_SIGNALS="SIGILL,SIGBUS,SIGFPE"
+export ZES_ENABLE_SYSMAN=1
 
-julia -e 'using Pkg; Pkg.add("BenchmarkTools"); Pkg.add(url="https://github.com/jdomke/FujitsuBLAS.jl.git"); Pkg.add("LinearAlgebra"); Pkg.add("LLVM"); Pkg.add("Reactant"); ENV["JULIA_MPI_BINARY"]="system"; ENV["JULIA_MPICC"]="mpifcc"; using Pkg; Pkg.add("MPI"); Pkg.build("MPI"; verbose=true);'
+julia -e 'using Pkg; Pkg.add("BenchmarkTools"); Pkg.add(url="https://github.com/jdomke/FujitsuBLAS.jl.git"); Pkg.add("LinearAlgebra"); Pkg.add("LLVM"); Pkg.add("Reactant");'
+
+julia -e "using Pkg; Pkg.add(\"MPIPreferences\"); using MPIPreferences; MPIPreferences.use_system_binary(mpiexec=\"$(readlink -f $(which mpiexec))\", library_names=[\"$(readlink -f $(dirname $(which mpiexec))/../lib/libmpi.so)\"]); Pkg.add(\"MPI\");"
+/bin/echo -e '\n[OpenMPI_jll]' >> ${JULIA_DEPOT_PATH}/environments/v*/LocalPreferences.toml; /bin/grep '^libmpi\|^mpiexec' ${JULIA_DEPOT_PATH}/environments/v*/LocalPreferences.toml | /bin/sed -e 's@ =@_path =@' >> ${JULIA_DEPOT_PATH}/environments/v*/LocalPreferences.toml
+julia -e 'using Pkg; Pkg.add("OpenMPI_jll");'
+
 julia -e 'using Pkg; Pkg.add("Oceananigans"); Pkg.status("Oceananigans");'
 
