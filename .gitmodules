@@ -1,3 +1,6 @@
 [submodule "julia"]
 	path = julia
 	url = https://github.com/JuliaLang/julia.git
+[submodule "GB-25"]
+	path = GB-25
+	url = https://github.com/PRONTOLab/GB-25.git
