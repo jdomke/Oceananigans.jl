@@ -47,6 +47,7 @@ export JULIA_NUM_THREADS=$(nproc)
 # fix known bugs: https://juliaparallel.org/MPI.jl/latest/knownissues/#Multi-threading-and-signal-handling
 export UCX_ERROR_SIGNALS="SIGILL,SIGBUS,SIGFPE"
 export ZES_ENABLE_SYSMAN=1
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${INSTDIR}/lib"
 
 # simple math
 julia -e 'using BenchmarkTools, LinearAlgebra; r1 = rand(8000, 8000); r2 = rand(8000, 8000); c = zeros(8000, 8000); println(@belapsed $c .= $r1 * $r2); println(@belapsed LinearAlgebra.mul!($c, $r1, $r2));'
@@ -69,6 +70,7 @@ if [ ! -d "${ROOTDIR}/GB-25/ocean-climate-simulation/" ]; then
 fi
 
 cd "${ROOTDIR}/GB-25/oceananigans-dynamical-core/"
+sed -i -e 's@= GPU()@= CPU()@g' super_simple_simulation.jl
 julia super_simple_simulation.jl
 
 cd "${ROOTDIR}/GB-25/ocean-climate-simulation"

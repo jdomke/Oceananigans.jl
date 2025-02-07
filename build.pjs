@@ -45,9 +45,13 @@ make O="${MBD}" configure
 cp Make.inc "${MBD}/"
 INSTDIR="${ROOTDIR}/inst/julia"
 export JULIA_DEPOT_PATH="${INSTDIR}/.julia"
+rm -rf "${INSTDIR}" "${JULIA_DEPOT_PATH}"
 
 make -j$(nproc) 2>&1 | tee mymake.log
 make prefix="${INSTDIR}" install
+cd "${INSTDIR}/lib/"
+find julia/ -mindepth 1 -exec ln -s {} \;
+cd "${ROOTDIR}/"
 
 alias julia="${INSTDIR}/bin/julia"
 
@@ -60,9 +64,12 @@ export ZES_ENABLE_SYSMAN=1
 
 julia -e 'using Pkg; Pkg.add("BenchmarkTools"); Pkg.add(url="https://github.com/jdomke/FujitsuBLAS.jl.git"); Pkg.add("LinearAlgebra"); Pkg.add("LLVM"); Pkg.add("Reactant");'
 
-julia -e "using Pkg; Pkg.add(\"MPIPreferences\"); using MPIPreferences; MPIPreferences.use_system_binary(mpiexec=\"$(readlink -f $(which mpiexec))\", library_names=[\"$(readlink -f $(dirname $(which mpiexec))/../lib/libmpi.so)\"]); Pkg.add(\"MPI\");"
+julia -e "using Pkg; Pkg.add(\"MPIPreferences\"); using MPIPreferences; MPIPreferences.use_system_binary(mpiexec=\"$(readlink -f $(which mpirun))\", library_names=[\"$(readlink -f $(dirname $(which mpirun))/../lib64/libmpi.so)\"]); Pkg.add(\"MPI\");"
 /bin/echo -e '\n[OpenMPI_jll]' >> ${JULIA_DEPOT_PATH}/environments/v*/LocalPreferences.toml; /bin/grep '^libmpi\|^mpiexec' ${JULIA_DEPOT_PATH}/environments/v*/LocalPreferences.toml | /bin/sed -e 's@ =@_path =@' >> ${JULIA_DEPOT_PATH}/environments/v*/LocalPreferences.toml
+#hdf5 must find libmpi.so.40
+ln -s "$(readlink -f $(dirname $(which mpirun))/../lib64/libmpi.so)" ${INSTDIR}/lib/libmpi.so.40
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${INSTDIR}/lib"
+
 julia -e 'using Pkg; Pkg.add("OpenMPI_jll");'
-
 julia -e 'using Pkg; Pkg.add("Oceananigans"); Pkg.status("Oceananigans");'
-
+julia -e 'using Pkg; Pkg.add("Reactant_jll"); Pkg.add("ClimaOcean"); Pkg.add("OrthogonalSphericalShellGrids"); Pkg.add("CFTime");'
